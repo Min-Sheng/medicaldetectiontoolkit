@@ -19,7 +19,7 @@
 import argparse
 import os, warnings
 import time
-
+import numpy as np
 import torch
 
 import utils.exp_utils as utils
@@ -183,6 +183,7 @@ if __name__ == '__main__':
                         help='if given, resume from checkpoint(s) of the specified folds.')
     parser.add_argument('--exp_source', type=str, default='experiments/toy_exp',
                         help='specifies, from which source experiment to load configs and data_loader.')
+    parser.add_argument('--no_deterministic', action='store_true', help="Do not use cudnn.deterministic.")
     parser.add_argument('--no_benchmark', action='store_true', help="Do not use cudnn.benchmark.")
     parser.add_argument('--cuda_device', type=int, default=0, help="Index of CUDA device to use.")
     parser.add_argument('-d', '--dev', default=False, action='store_true', help="development mode: shorten everything")
@@ -203,6 +204,16 @@ if __name__ == '__main__':
             cf.max_test_patients = 2
 
         cf.data_dest = args.data_dest
+
+        if not args.no_deterministic:
+            np.random.seed(0)
+
+            torch.manual_seed(cf.seed)
+            torch.cuda.manual_seed(cf.seed)
+            torch.cuda.manual_seed_all(cf.seed)
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+
         logger = utils.get_logger(cf.exp_dir, cf.server_env)
         logger.info("cudnn benchmark: {}, deterministic: {}.".format(torch.backends.cudnn.benchmark,
                                                                      torch.backends.cudnn.deterministic))

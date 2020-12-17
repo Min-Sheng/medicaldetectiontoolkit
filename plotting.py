@@ -145,12 +145,12 @@ def plot_batch_prediction(batch: dict, results_dict: dict, cf, outfile: Union[st
                                 if 'sample_id' in box.keys() and int(box['sample_id']) != m - data.shape[1] - 2:
                                         continue
                                 # if prob detection: plot reconstructed boxes only in corresponding line.
-                                if not 'sample_id' in box.keys() and  m != data.shape[1] + 1:
+                                if not 'sample_id' in box.keys() and  (m != data.shape[1] + 1) and (m != show_arrays.shape[1] - 1):
                                     continue
 
                                 score_font_size = 7
                                 text_color = 'w'
-                                text_x = coords[1] + 10*(box['box_pred_class_id'] -1) #avoid overlap of scores in plot.
+                                text_x = coords[1] + 5*(box['box_pred_class_id'] -1) #avoid overlap of scores in plot.
                                 text_y = coords[2] + 5
                             else:
                                 continue

@@ -53,10 +53,9 @@ def get_train_generators(cf, logger):
     """
     all_data = load_dataset(cf, logger)
     all_pids_list = np.unique([v['pid'] for (k, v) in all_data.items()])
-
     splits_file = os.path.join(cf.exp_dir, 'fold_ids.pickle')
     if not os.path.exists(splits_file) and not cf.created_fold_id_pickle:
-        fg = dutils.fold_generator(seed=cf.seed, n_splits=cf.n_cv_splits, len_data=len(all_pids_list), file_csv_dict=cf.file_csv_dict, pids_list=all_pids_list).get_fold_names()
+        fg = dutils.fold_generator(seed=cf.seed, n_splits=cf.n_cv_splits, len_data=len(all_pids_list)).get_fold_names()
         with open(splits_file, 'wb') as handle:
             pickle.dump(fg, handle)
         cf.created_fold_id_pickle = True
@@ -105,13 +104,6 @@ def get_test_generator(cf, logger):
         # warnings.warn('WARNING: using validation set for testing!!!')
 
     test_data = load_dataset(cf, logger, test_ix, pp_data_path=cf.pp_test_data_path, pp_name=pp_name)
-    if cf.file_csv_dict:
-        all_pids_list = np.unique([v['pid'] for (k, v) in test_data.items()])
-        train_pids, val_pids, test_pids = dutils.read_csv(cf.file_csv_dict)
-        test_inter_pids = set(all_pids_list).intersection(test_pids)
-        test_data = {k: v for (k, v) in test_data.items() if any(p == v['pid'] for p in test_inter_pids)}
-        test_ix = np.arange(len(test_data))
-
     logger.info("data set loaded with: {} test patients".format(len(test_ix)))
     batch_gen = {}
     batch_gen['test'] = PatientBatchIterator(test_data, cf=cf)
@@ -167,21 +159,18 @@ def load_dataset(cf, logger, subset_ixs=None, pp_data_path=None, pp_name=None):
 
     class_targets = p_df['class_target'].tolist()
     pids = p_df.pid.tolist()
+    pids = [f'{i:04}' for i in pids] 
     imgs = [os.path.join(pp_data_path, '{}_img.npy'.format(pid)) for pid in pids]
     segs = [os.path.join(pp_data_path,'{}_rois.npy'.format(pid)) for pid in pids]
 
     data = OrderedDict()
     for ix, pid in enumerate(pids):
-        if len(class_targets[ix])==0:
-            continue
-        # for the experiment conducted here, malignancy scores are binarized: (benign: 1-2, malignant: 3-5)
-        targets = [1 if ii >= 3 else 0 for ii in class_targets[ix]]
+        # for the experiment conducted here, texture scores are: (GGO: texture<2.3, semi-solid: 2.3<=texture<3.6, solid: texture>=3.6)
+        targets = [0 if ii < 2.3 else 1 if ii < 3.6 else 2 for ii in class_targets[ix]]
         data[pid] = {'data': imgs[ix], 'seg': segs[ix], 'pid': pid, 'class_target': targets}
         data[pid]['fg_slices'] = p_df['fg_slices'].tolist()[ix]
 
     return data
-
-
 
 def create_data_gen_pipeline(patient_data, cf, is_training=True):
     """

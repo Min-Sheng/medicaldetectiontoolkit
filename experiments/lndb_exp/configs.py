@@ -28,8 +28,8 @@ class configs(DefaultConfigs):
         #    Preprocessing      #
         #########################
 
-        self.root_dir = '/mnt/deep-learning/usr/vincentwu/LIDC'
-        self.raw_data_dir = '{}/new_nrrd'.format(self.root_dir)
+        self.root_dir = '/mnt/deep-learning/usr/vincentwu/LNDB'
+        # self.raw_data_dir = '{}/new_nrrd'.format(self.root_dir)
         self.pp_dir = '{}/pp_norm'.format(self.root_dir)
         self.target_spacing = (0.7, 0.7, 1.25)
 
@@ -54,16 +54,15 @@ class configs(DefaultConfigs):
         self.input_df_name = 'info_df.pickle'
         self.pp_data_path = os.path.join(self.root_dir, self.pp_name)
         self.pp_test_data_path = self.pp_data_path #change if test_data in separate folder.
-        
+
         self.file_csv_dict = {
-            'train_csv': '/home/vincentwu/LIDC/train.csv',
-            'val_csv': '/home/vincentwu/LIDC/val.csv',
-            'test_csv':'/home/vincentwu/LIDC/test.csv',
+            'train_val_csv': '/home/vincentwu/LNDB/train_val.csv',
+            'test_csv':'/home/vincentwu/LNDB/test.csv',
         }
         if self.file_csv_dict is not None:
             # number of folds in cross validation.
             self.n_cv_splits = 1
-            self.hold_out_test_set = True
+        
         # settings for deployment in cloud.
         if server_env:
             # path to preprocessed data.
@@ -119,9 +118,11 @@ class configs(DefaultConfigs):
         #########################
         #  Schedule / Selection #
         #########################
+        # number of folds in cross validation.
+        self.n_cv_splits = 5
 
         self.num_epochs = 100
-        self.num_train_batches = 200 if self.dim == 2 else 200
+        self.num_train_batches = 100 if self.dim == 2 else 200
         self.batch_size = 20 if self.dim == 2 else 8
 
         self.do_validation = True
@@ -139,7 +140,7 @@ class configs(DefaultConfigs):
         self.dynamic_lr_scheduling = False
         self.lr_decay_factor = 0.25
         self.scheduling_patience = np.ceil(16000 / (self.num_train_batches * self.batch_size))
-        self.scheduling_criterion = 'malignant_ap'
+        self.scheduling_criterion = 'mean_ap'
         self.scheduling_mode = 'min' if "loss" in self.scheduling_criterion else 'max'
 
         #########################
@@ -148,16 +149,16 @@ class configs(DefaultConfigs):
 
         # set the top-n-epochs to be saved for temporal averaging in testing.
         self.save_n_models = 5
-        self.test_n_epochs = 1
+        self.test_n_epochs = 1 #5
         # set a minimum epoch number for saving in case of instabilities in the first phase of training.
         self.min_save_thresh = 0 if self.dim == 2 else 0
 
         self.report_score_level = ['patient', 'rois']  # choose list from 'patient', 'rois'
-        self.class_dict = {1: 'benign', 2: 'malignant'}  # 0 is background.
+        self.class_dict = {1: 'GGO', 2: 'semi-solid',  3: 'solid'}  # 0 is background.
         self.patient_class_of_interest = 2  # patient metrics are only plotted for one class.
         self.ap_match_ious = [0.1]  # list of ious to be evaluated for ap-scoring.
 
-        self.model_selection_criteria = ['malignant_ap', 'benign_ap'] # criteria to average over for saving epochs.
+        self.model_selection_criteria = ['GGO_ap', 'semi-solid_ap', 'solid_ap'] # criteria to average over for saving epochs.
         self.min_det_thresh = 0.1  # minimum confidence value to select predictions for evaluation.
 
         # threshold for clustering predictions together (wcs = weighted cluster scoring).
@@ -224,12 +225,12 @@ class configs(DefaultConfigs):
         # if <1, false positive predictions in foreground are penalized less.
         self.fp_dice_weight = 1 if self.dim == 2 else 1
 
-        self.wce_weights = [0.3, 1, 1]
+        self.wce_weights = [0.3, 1, 1, 1]
         self.detection_min_confidence = self.min_det_thresh
 
         # if 'True', loss distinguishes all classes, else only foreground vs. background (class agnostic).
         self.class_specific_seg_flag = True
-        self.num_seg_classes = 3 if self.class_specific_seg_flag else 2
+        self.num_seg_classes = 4 if self.class_specific_seg_flag else 3
         self.head_classes = self.num_seg_classes
 
     def add_mrcnn_configs(self):
@@ -247,7 +248,7 @@ class configs(DefaultConfigs):
         self.n_plot_rpn_props = 5 if self.dim == 2 else 30
 
         # number of classes for head networks: n_foreground_classes + 1 (background)
-        self.head_classes = 3
+        self.head_classes = 4
 
         # seg_classes hier refers to the first stage classifier (RPN)
         self.num_seg_classes = 2  # foreground vs. background
@@ -327,7 +328,7 @@ class configs(DefaultConfigs):
         if self.model == 'ufrcnn':
             self.operate_stride1 = True
             self.class_specific_seg_flag = True
-            self.num_seg_classes = 3 if self.class_specific_seg_flag else 2
+            self.num_seg_classes = 4 if self.class_specific_seg_flag else 3
             self.frcnn_mode = True
 
         if self.model == 'retina_net' or self.model == 'retina_unet':
@@ -347,7 +348,7 @@ class configs(DefaultConfigs):
             self.anchor_matching_iou = 0.5
 
             # if 'True', seg loss distinguishes all classes, else only foreground vs. background (class agnostic).
-            self.num_seg_classes = 3 if self.class_specific_seg_flag else 2
+            self.num_seg_classes = 4 if self.class_specific_seg_flag else 3
 
             if self.model == 'retina_unet':
                 self.operate_stride1 = True

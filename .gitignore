@@ -11,3 +11,6 @@ __pycache__/*
 *.so
 
 !/assets/*
+
+res*/
+*.patch

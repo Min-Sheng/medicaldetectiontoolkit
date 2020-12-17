@@ -107,6 +107,7 @@ class Predictor:
         self.patched_patient = 'patch_crop_coords' in batch.keys()
 
         # forward batch through prediction pipeline.
+        print(batch['data'].shape)
         results_dict = self.data_aug_forward(batch)
 
         if self.mode == 'val':

@@ -18,7 +18,11 @@ import numpy as np
 import os
 from multiprocessing import Pool
 
-
+def read_csv(file_dict):
+    train_idxs = np.genfromtxt(file_dict['train_csv'], dtype=str, skip_header=1)
+    val_idxs = np.genfromtxt(file_dict['val_csv'], dtype=str, skip_header=1)
+    test_idxs = np.genfromtxt(file_dict['test_csv'], dtype=str, skip_header=1)
+    return train_idxs, val_idxs, test_idxs
 
 def get_class_balanced_patients(class_targets, batch_size, num_classes, slack_factor=0.1):
     '''
@@ -64,9 +68,10 @@ class fold_generator:
     statistically reliable amount of patients, despite limited size of a dataset.
     If hold out test set is provided and hence no inner loop test set needed, just add test_idxs to the training data in the dataloader.
     This creates straight-forward train-val splits.
+    (if the train/val/test csv is given, the generator perform the simple data splitting)
     :returns names list: list of len n_splits. each element is a list of len 3 for train_ix, val_ix, test_ix.
     """
-    def __init__(self, seed, n_splits, len_data):
+    def __init__(self, seed, n_splits, len_data, file_csv_dict=None, pids_list=None):
         """
         :param seed: Random seed for splits.
         :param n_splits: number of splits, e.g. 5 splits for 5-fold cross-validation
@@ -82,22 +87,34 @@ class fold_generator:
         self.n_splits = n_splits
         self.myseed = seed
         self.boost_val = 0
+        self.file_csv_dict = file_csv_dict
+        self.pids_list = pids_list
 
     def init_indices(self):
+        
+        if not self.file_csv_dict:
+            t = list(np.arange(self.l))
+            # round up to next splittable data amount.
+            split_length = int(np.ceil(len(t) / float(self.n_splits)))
+            self.slicer = split_length
+            self.mod = len(t) % self.n_splits
+            if self.mod > 0:
+                # missing is the number of folds, in which the new splits are reduced to account for missing data.
+                self.missing = self.n_splits - self.mod
 
-        t = list(np.arange(self.l))
-        # round up to next splittable data amount.
-        split_length = int(np.ceil(len(t) / float(self.n_splits)))
-        self.slicer = split_length
-        self.mod = len(t) % self.n_splits
-        if self.mod > 0:
-            # missing is the number of folds, in which the new splits are reduced to account for missing data.
-            self.missing = self.n_splits - self.mod
+            self.te_ix = t[:self.slicer]
+            self.tr_ix = t[self.slicer:]
+            self.val_ix = self.tr_ix[:self.slicer]
+            self.tr_ix = self.tr_ix[self.slicer:]
+        else:
+            train_idxs, val_idxs, test_idxs = read_csv(self.file_csv_dict)
+            train_inter_idxs = set(self.pids_list).intersection(train_idxs)
+            test_inter_idxs = set(self.pids_list).intersection(test_idxs)
+            val_inter_idxs = set(self.pids_list).intersection(val_idxs)
 
-        self.te_ix = t[:self.slicer]
-        self.tr_ix = t[self.slicer:]
-        self.val_ix = self.tr_ix[:self.slicer]
-        self.tr_ix = self.tr_ix[self.slicer:]
+            self.tr_ix = [list(self.pids_list).index(x) for x in train_inter_idxs]
+            self.te_ix = [list(self.pids_list).index(x) for x in test_inter_idxs]
+            self.val_ix = [list(self.pids_list).index(x) for x in val_inter_idxs]
 
     def new_fold(self):
 
@@ -119,20 +136,23 @@ class fold_generator:
 
 
     def get_fold_names(self):
-        names_list = []
-        rgen = np.random.RandomState(self.myseed)
-        cv_names = np.arange(self.len_data)
+        if not self.file_csv_dict:
+            names_list = []
+            rgen = np.random.RandomState(self.myseed)
+            cv_names = np.arange(self.len_data)
 
-        rgen.shuffle(cv_names)
-        self.l = len(cv_names)
-        self.init_indices()
+            rgen.shuffle(cv_names)
+            self.l = len(cv_names)
+            self.init_indices()
 
-        for split in range(self.n_splits):
-            train_names, val_names, test_names = cv_names[self.tr_ix], cv_names[self.val_ix], cv_names[self.te_ix]
-            names_list.append([train_names, val_names, test_names, self.fold])
-            self.new_fold()
-            self.fold += 1
-
+            for split in range(self.n_splits):
+                train_names, val_names, test_names = cv_names[self.tr_ix], cv_names[self.val_ix], cv_names[self.te_ix]
+                names_list.append([train_names, val_names, test_names, self.fold])
+                self.new_fold()
+                self.fold += 1
+        else:
+            self.init_indices()
+            names_list = [[np.array(self.tr_ix), np.array(self.val_ix), np.array(self.te_ix), self.fold]]
         return names_list
 
 
