@@ -69,6 +69,9 @@ def train(logger):
     # prepare monitoring
     monitor_metrics = utils.prepare_monitoring(cf)
 
+    if cf.pre_train_path:
+        utils.load_pre_trained_weights(cf.pre_train_path, net, optimizer, cf)
+        
     if cf.resume:
         checkpoint_path = os.path.join(cf.fold_dir, "last_checkpoint")
         starting_epoch, net, optimizer, monitor_metrics = \
