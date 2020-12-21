@@ -63,6 +63,7 @@ class configs(DefaultConfigs):
         if self.file_csv_dict is not None:
             # number of folds in cross validation.
             self.n_cv_splits = 1
+            self.hold_out_test_set = True
 
         # settings for deployment in cloud.
         if server_env:
@@ -109,12 +110,13 @@ class configs(DefaultConfigs):
         self.start_filts = 48 if self.dim == 2 else 18
         self.end_filts = self.start_filts * 4 if self.dim == 2 else self.start_filts * 2
         self.res_architecture = 'resnet50' # 'resnet101' , 'resnet50'
-        self.norm = None # one of None, 'instance_norm', 'batch_norm'
+        self.norm = 'batch_norm' # one of None, 'instance_norm', 'batch_norm'
         # 0 for no weight decay
-        self.weight_decay = 0
+        self.weight_decay = 1e-4
 
         # one of 'xavier_uniform', 'xavier_normal', or 'kaiming_normal', None (=default = 'kaiming_uniform')
         self.weight_init = None
+        self.pre_train_path = None   # Path to checkpoint of an experiment. Models loads only the matching keys from net.state_dict
 
         #########################
         #  Schedule / Selection #
@@ -139,7 +141,7 @@ class configs(DefaultConfigs):
         self.dynamic_lr_scheduling = False
         self.lr_decay_factor = 0.25
         self.scheduling_patience = np.ceil(16000 / (self.num_train_batches * self.batch_size))
-        self.scheduling_criterion = 'mean_ap'
+        self.scheduling_criterion = 'nodule_ap'
         self.scheduling_mode = 'min' if "loss" in self.scheduling_criterion else 'max'
 
         #########################
@@ -153,11 +155,19 @@ class configs(DefaultConfigs):
         self.min_save_thresh = 0 if self.dim == 2 else 0
 
         self.report_score_level = ['patient', 'rois']  # choose list from 'patient', 'rois'
-        self.class_dict = {1: 'solid', 2: 'semi-solid', 3: 'GGO'}  # 0 is background.
+        self.multi_class = True
+        if self.multi_class:
+            self.class_dict = {1: 'solid', 2: 'semi-solid', 3: 'GGO'}  # 0 is background.
+        else:
+            self.class_dict = {1: 'nodule'}  # 0 is background.
+
         self.patient_class_of_interest = 1  # patient metrics are only plotted for one class.
         self.ap_match_ious = [0.1]  # list of ious to be evaluated for ap-scoring.
 
-        self.model_selection_criteria = ['GGO_ap', 'semi-solid_ap', 'solid_ap'] # criteria to average over for saving epochs.
+        if self.multi_class:
+            self.model_selection_criteria = ['GGO_ap', 'semi-solid_ap', 'solid_ap'] # criteria to average over for saving epochs.
+        else:
+            self.model_selection_criteria = ['nodule_ap']
         self.min_det_thresh = 0.1  # minimum confidence value to select predictions for evaluation.
 
         # threshold for clustering predictions together (wcs = weighted cluster scoring).
@@ -219,17 +229,26 @@ class configs(DefaultConfigs):
         self.n_roi_candidates = 10 if self.dim == 2 else 30
 
         # loss mode: either weighted cross entropy ('wce'), batch-wise dice loss ('dice), or the sum of both ('dice_wce')
-        self.seg_loss_mode = 'dice_wce'
+        if self.multi_class:
+            self.seg_loss_mode = 'dice_wce'
+        else:
+            self.seg_loss_mode = 'dice'
 
         # if <1, false positive predictions in foreground are penalized less.
         self.fp_dice_weight = 1 if self.dim == 2 else 1
 
-        self.wce_weights = [0.3, 1, 1, 1]
+        if self.multi_class:
+            self.wce_weights = [0.3, 1, 1, 1]
+        else:
+            self.wce_weights = [0.3, 1]
         self.detection_min_confidence = self.min_det_thresh
 
         # if 'True', loss distinguishes all classes, else only foreground vs. background (class agnostic).
         self.class_specific_seg_flag = True
-        self.num_seg_classes = 4 if self.class_specific_seg_flag else 3
+        if self.multi_class:
+            self.num_seg_classes = 4 if self.class_specific_seg_flag else 2
+        else:
+            self.num_seg_classes = 2 if self.class_specific_seg_flag else 2
         self.head_classes = self.num_seg_classes
 
     def add_mrcnn_configs(self):
@@ -247,7 +266,10 @@ class configs(DefaultConfigs):
         self.n_plot_rpn_props = 5 if self.dim == 2 else 30
 
         # number of classes for head networks: n_foreground_classes + 1 (background)
-        self.head_classes = 4
+        if self.multi_class:
+            self.head_classes = 4
+        else:
+            self.head_classes = 2
 
         # seg_classes hier refers to the first stage classifier (RPN)
         self.num_seg_classes = 2  # foreground vs. background
@@ -327,7 +349,10 @@ class configs(DefaultConfigs):
         if self.model == 'ufrcnn':
             self.operate_stride1 = True
             self.class_specific_seg_flag = True
-            self.num_seg_classes = 4 if self.class_specific_seg_flag else 3
+            if self.multi_class:
+                self.num_seg_classes = 4 if self.class_specific_seg_flag else 2
+            else:
+                self.num_seg_classes = 2 if self.class_specific_seg_flag else 2
             self.frcnn_mode = True
 
         if self.model == 'retina_net' or self.model == 'retina_unet':
@@ -347,7 +372,10 @@ class configs(DefaultConfigs):
             self.anchor_matching_iou = 0.5
 
             # if 'True', seg loss distinguishes all classes, else only foreground vs. background (class agnostic).
-            self.num_seg_classes = 4 if self.class_specific_seg_flag else 3
+            if self.multi_class:
+                self.num_seg_classes = 4 if self.class_specific_seg_flag else 2
+            else:
+                self.num_seg_classes = 2 if self.class_specific_seg_flag else 2
 
             if self.model == 'retina_unet':
                 self.operate_stride1 = True
