@@ -208,13 +208,13 @@ def refine_detections(anchors, probs, deltas, batch_ixs, cf):
     flat_probs, flat_probs_order = fg_probs.view(-1).sort(descending=True)
     keep_ix = flat_probs_order[:cf.pre_nms_limit]
     # reshape indices to 2D index array with shape like fg_probs.
-    keep_arr = torch.cat((torch.floor(keep_ix / fg_probs.shape[1]).unsqueeze(1), (keep_ix % fg_probs.shape[1]).unsqueeze(1)), 1).long().cuda()
+    keep_arr = torch.cat(((keep_ix // fg_probs.shape[1]).unsqueeze(1), (keep_ix % fg_probs.shape[1]).unsqueeze(1)), 1).long().cuda()
     pre_nms_scores = flat_probs[:cf.pre_nms_limit]
     pre_nms_class_ids = keep_arr[:, 1] + 1  # add background again.
     pre_nms_batch_ixs = batch_ixs[keep_arr[:, 0]]
     pre_nms_anchors = anchors[keep_arr[:, 0]]
     pre_nms_deltas = deltas[keep_arr[:, 0]]
-    keep = torch.arange(pre_nms_scores.size()[0]).long().cuda()
+    keep = torch.arange(0, pre_nms_scores.size()[0]).long().cuda()
 
     # apply bounding box deltas. re-scale to image coordinates.
     std_dev = torch.from_numpy(np.reshape(cf.rpn_bbox_std_dev, [1, cf.dim * 2])).float().cuda()
