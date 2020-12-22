@@ -165,8 +165,11 @@ def load_dataset(cf, logger, subset_ixs=None, pp_data_path=None, pp_name=None):
 
     data = OrderedDict()
     for ix, pid in enumerate(pids):
-        # for the experiment conducted here, texture scores are: (GGO: texture<2.3, semi-solid: 2.3<=texture<3.6, solid: texture>=3.6)
-        targets = [0 if ii < 2.3 else 1 if ii < 3.6 else 2 for ii in class_targets[ix]]
+        if cf.multi_class:
+            # for the experiment conducted here, texture scores are: (GGO: texture<2.3, semi-solid: 2.3<=texture<3.6, solid: texture>=3.6)
+            targets = [0 if ii < 2.3 else 1 if ii < 3.6 else 2 for ii in class_targets[ix]]
+        else:
+            targets = [0 for ii in class_targets[ix] if ii > 0]
         data[pid] = {'data': imgs[ix], 'seg': segs[ix], 'pid': pid, 'class_target': targets}
         data[pid]['fg_slices'] = p_df['fg_slices'].tolist()[ix]
 
