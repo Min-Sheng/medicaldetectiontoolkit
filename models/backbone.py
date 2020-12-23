@@ -24,7 +24,7 @@ class FPN(nn.Module):
     Feature Pyramid Network from https://arxiv.org/pdf/1612.03144.pdf with options for modifications.
     by default is constructed with Pyramid levels P2, P3, P4, P5.
     """
-    def __init__(self, cf, conv, operate_stride1=False):
+    def __init__(self, cf, conv, operate_stride1=False, use_domainatt=False):
         """
         from configs:
         :param input_channels: number of channel dimensions in input data.
@@ -47,6 +47,7 @@ class FPN(nn.Module):
         self.operate_stride1 = operate_stride1
         self.sixth_pooling = cf.sixth_pooling
         self.dim = conv.dim
+        self.use_domainatt = use_domainatt
 
         if operate_stride1:
             self.C0 = nn.Sequential(conv(cf.n_channels, start_filts, ks=3, pad=1, norm=cf.norm, relu=cf.relu),
@@ -63,38 +64,38 @@ class FPN(nn.Module):
         C2_layers.append(nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
                          if conv.dim == 2 else nn.MaxPool3d(kernel_size=3, stride=(2, 2, 1), padding=1))
         C2_layers.append(self.block(start_filts, start_filts, conv=conv, stride=1, norm=cf.norm, relu=cf.relu,
-                                    downsample=(start_filts, self.block_expansion, 1)))
+                                    downsample=(start_filts, self.block_expansion, 1), use_domainatt=self.use_domainatt))
         for i in range(1, self.n_blocks[0]):
-            C2_layers.append(self.block(start_filts_exp, start_filts, conv=conv, norm=cf.norm, relu=cf.relu))
+            C2_layers.append(self.block(start_filts_exp, start_filts, conv=conv, norm=cf.norm, relu=cf.relu, use_domainatt=self.use_domainatt))
         self.C2 = nn.Sequential(*C2_layers)
 
         C3_layers = []
         C3_layers.append(self.block(start_filts_exp, start_filts * 2, conv=conv, stride=2, norm=cf.norm, relu=cf.relu,
-                                    downsample=(start_filts_exp, 2, 2)))
+                                    downsample=(start_filts_exp, 2, 2), use_domainatt=self.use_domainatt))
         for i in range(1, self.n_blocks[1]):
-            C3_layers.append(self.block(start_filts_exp * 2, start_filts * 2, conv=conv, norm=cf.norm, relu=cf.relu))
+            C3_layers.append(self.block(start_filts_exp * 2, start_filts * 2, conv=conv, norm=cf.norm, relu=cf.relu, use_domainatt=self.use_domainatt))
         self.C3 = nn.Sequential(*C3_layers)
 
         C4_layers = []
         C4_layers.append(self.block(
-            start_filts_exp * 2, start_filts * 4, conv=conv, stride=2, norm=cf.norm, relu=cf.relu, downsample=(start_filts_exp * 2, 2, 2)))
+            start_filts_exp * 2, start_filts * 4, conv=conv, stride=2, norm=cf.norm, relu=cf.relu, downsample=(start_filts_exp * 2, 2, 2), use_domainatt=self.use_domainatt))
         for i in range(1, self.n_blocks[2]):
-            C4_layers.append(self.block(start_filts_exp * 4, start_filts * 4, conv=conv, norm=cf.norm, relu=cf.relu))
+            C4_layers.append(self.block(start_filts_exp * 4, start_filts * 4, conv=conv, norm=cf.norm, relu=cf.relu, use_domainatt=self.use_domainatt))
         self.C4 = nn.Sequential(*C4_layers)
 
         C5_layers = []
         C5_layers.append(self.block(
-            start_filts_exp * 4, start_filts * 8, conv=conv, stride=2, norm=cf.norm, relu=cf.relu, downsample=(start_filts_exp * 4, 2, 2)))
+            start_filts_exp * 4, start_filts * 8, conv=conv, stride=2, norm=cf.norm, relu=cf.relu, downsample=(start_filts_exp * 4, 2, 2), use_domainatt=self.use_domainatt))
         for i in range(1, self.n_blocks[3]):
-            C5_layers.append(self.block(start_filts_exp * 8, start_filts * 8, conv=conv, norm=cf.norm, relu=cf.relu))
+            C5_layers.append(self.block(start_filts_exp * 8, start_filts * 8, conv=conv, norm=cf.norm, relu=cf.relu, use_domainatt=self.use_domainatt))
         self.C5 = nn.Sequential(*C5_layers)
 
         if self.sixth_pooling:
             C6_layers = []
             C6_layers.append(self.block(
-                start_filts_exp * 8, start_filts * 16, conv=conv, stride=2, norm=cf.norm, relu=cf.relu, downsample=(start_filts_exp * 8, 2, 2)))
+                start_filts_exp * 8, start_filts * 16, conv=conv, stride=2, norm=cf.norm, relu=cf.relu, downsample=(start_filts_exp * 8, 2, 2), use_domainatt=self.use_domainatt))
             for i in range(1, self.n_blocks[3]):
-                C6_layers.append(self.block(start_filts_exp * 16, start_filts * 16, conv=conv, norm=cf.norm, relu=cf.relu))
+                C6_layers.append(self.block(start_filts_exp * 16, start_filts * 16, conv=conv, norm=cf.norm, relu=cf.relu, use_domainatt=self.use_domainatt))
             self.C6 = nn.Sequential(*C6_layers)
 
         if conv.dim == 2:
@@ -182,11 +183,15 @@ class FPN(nn.Module):
 
 class ResBlock(nn.Module):
 
-    def __init__(self, start_filts, planes, conv, stride=1, downsample=None, norm=None, relu='relu'):
+    def __init__(self, start_filts, planes, conv, stride=1, downsample=None, norm=None, relu='relu', use_domainatt=False):
         super(ResBlock, self).__init__()
         self.conv1 = conv(start_filts, planes, ks=1, stride=stride, norm=norm, relu=relu)
         self.conv2 = conv(planes, planes, ks=3, pad=1, norm=norm, relu=relu)
         self.conv3 = conv(planes, planes * 4, ks=1, norm=norm, relu=None)
+        self.use_domainatt = use_domainatt
+        if self.use_domainatt:
+            self.domainatt = DomainAttention(planes * 4, conv, norm=norm)
+
         self.relu = nn.ReLU(inplace=True) if relu == 'relu' else nn.LeakyReLU(inplace=True)
         if downsample is not None:
             self.downsample = conv(downsample[0], downsample[0] * downsample[1], ks=1, stride=downsample[2], norm=norm, relu=None)
@@ -199,6 +204,9 @@ class ResBlock(nn.Module):
         out = self.conv1(x)
         out = self.conv2(out)
         out = self.conv3(out)
+        if self.use_domainatt:
+            out = self.domainatt(out)
+
         if self.downsample:
             residual = self.downsample(x)
         out += residual
@@ -216,3 +224,49 @@ class Interpolate(nn.Module):
     def forward(self, x):
         x = self.interp(x, scale_factor=self.scale_factor, mode=self.mode, align_corners=False)
         return x
+
+class DomainAttention(nn.Module):
+    def __init__(self, planes, conv, reduction=2, relu='relu', norm=None):
+        super(DomainAttention, self).__init__()
+        self.dim = conv.dim
+        if self.dim == 2:
+            self.avg_pooling = nn.AdaptiveAvgPool2d(1)
+        else :
+            self.avg_pooling = nn.AdaptiveAvgPool3d(1)
+
+        self.SE1 = nn.Sequential(
+            conv(planes, planes // reduction, ks=1, stride=1, pad=0, norm=norm, relu=relu),
+            conv(planes // reduction, planes, ks=1, stride=1, pad=0, norm=norm, relu=None)
+        )
+        self.SE2 = nn.Sequential(
+            conv(planes, planes // reduction, ks=1, stride=1, pad=0, norm=norm, relu=relu),
+            conv(planes // reduction, planes, ks=1, stride=1, pad=0, norm=norm, relu=None)
+        )
+        self.SE3 = nn.Sequential(
+            conv(planes, planes // reduction, ks=1, stride=1, pad=0, norm=norm, relu=relu),
+            conv(planes // reduction, planes, ks=1, stride=1, pad=0, norm=norm, relu=None)
+        )
+        self.domainatt =  nn.Sequential(
+            conv(planes, planes // reduction, ks=1, stride=1, pad=0, norm=norm, relu=relu),
+            conv(planes // reduction, 3, ks=1, stride=1, pad=0, norm=norm, relu=None)
+        )
+        self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, x):
+        if self.dim == 2:
+            b,c,h,w = x.size()
+        else:
+            b,c,h,w,d = x.size()
+        pooled_feat = self.avg_pooling(x)
+        att1 = self.SE1(pooled_feat).view(b, c, 1)
+        att2 = self.SE2(pooled_feat).view(b, c, 1)
+        att3 = self.SE3(pooled_feat).view(b, c, 1)
+        weight = self.domainatt(pooled_feat)
+        weight = self.softmax(weight).view(b, 3, 1)
+        SELayers_Matrix = torch.cat((att1, att2, att3), 2)
+        if self.dim == 2:
+            SELayers_Matrix = torch.matmul(SELayers_Matrix, weight).view(b, c, 1, 1)
+        else:
+            SELayers_Matrix = torch.matmul(SELayers_Matrix, weight).view(b, c, 1, 1, 1)
+        SELayers_Matrix = F.sigmoid(SELayers_Matrix)
+        return x * SELayers_Matrix.expand_as(x)

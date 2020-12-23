@@ -56,6 +56,8 @@ class DefaultConfigs:
         #########################
         #      Architecture      #
         #########################
+        
+        self.use_domainatt = False
 
         self.weight_decay = 0.0
         # what weight or layer types to exclude from weight decay. options: ["bias", "norm"].
