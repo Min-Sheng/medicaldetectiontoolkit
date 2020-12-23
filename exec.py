@@ -34,6 +34,11 @@ for msg in ["Attempting to set identical bottom==top results",
             ".*Mean of empty slice.*"]:
     warnings.filterwarnings("ignore", msg)
 
+def lr_decay(s, lr, milestone, gamma=0.1):
+    for m in milestone:
+        if s > m:
+            lr = lr * gamma
+    return lr
 
 def train(logger):
     """
@@ -56,7 +61,7 @@ def train(logger):
                                       lr=cf.learning_rate[0])
 
     if cf.multi_step_lr_scheduling:
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=cf.scheduling_milestones, gamma=cf.lr_decay_factor)
+        cf.learning_rate = [lr_decay(s, lr, cf.scheduling_milestones, cf.lr_decay_factor) for s, lr in enumerate(cf.learning_rate)]
 
     if cf.dynamic_lr_scheduling:
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode=cf.scheduling_mode, factor=cf.lr_decay_factor,
@@ -99,8 +104,9 @@ def train(logger):
             optimizer.zero_grad()
             results_dict['torch_loss'].backward()
             optimizer.step()
-            print('\rtr. batch {0}/{1} (ep. {2}) fw {3:.2f}s / bw {4:.2f} s / total {5:.2f} s || '.format(
-                bix + 1, cf.num_train_batches, epoch, tic_bw - tic_fw, time.time() - tic_bw,
+
+            print('\rtr. batch {0}/{1} lr {2} (ep. {3}) fw {4:.2f}s / bw {5:.2f} s / total {6:.2f} s || '.format(
+                bix + 1, cf.num_train_batches, optimizer.param_groups[0]["lr"], epoch, tic_bw - tic_fw, time.time() - tic_bw,
                 time.time() - tic_fw) + results_dict['logger_string'], flush=True, end="")
             train_results_list.append(({k:v for k,v in results_dict.items() if k != "seg_preds"}, batch["pid"]))
         print()
@@ -149,8 +155,6 @@ def train(logger):
         # -------------- scheduling -----------------
         if cf.dynamic_lr_scheduling:
             scheduler.step(monitor_metrics["val"][cf.scheduling_criterion][-1])
-        elif cf.multi_step_lr_scheduling:
-            scheduler.step()
         else:
             for param_group in optimizer.param_groups:
                 param_group['lr'] = cf.learning_rate[epoch-1]
