@@ -71,7 +71,7 @@ class fold_generator:
     (if the train/val/test csv is given, the generator perform the simple data splitting)
     :returns names list: list of len n_splits. each element is a list of len 3 for train_ix, val_ix, test_ix.
     """
-    def __init__(self, seed, n_splits, len_data, file_csv_dict=None, pids_list=None):
+    def __init__(self, seed, n_splits, len_data, file_csv_dict=None, pids_list=None, multi_dataset=False):
         """
         :param seed: Random seed for splits.
         :param n_splits: number of splits, e.g. 5 splits for 5-fold cross-validation
@@ -89,6 +89,7 @@ class fold_generator:
         self.boost_val = 0
         self.file_csv_dict = file_csv_dict
         self.pids_list = pids_list
+        self.multi_dataset = multi_dataset
 
     def init_indices(self):
         
@@ -107,7 +108,21 @@ class fold_generator:
             self.val_ix = self.tr_ix[:self.slicer]
             self.tr_ix = self.tr_ix[self.slicer:]
         else:
-            train_idxs, val_idxs, test_idxs = read_csv(self.file_csv_dict)
+            if self.multi_dataset:
+                train_idxs, val_idxs, test_idxs = [], [], []
+                for dataset_name in self.file_csv_dict.keys():
+                    train_idxs_, val_idxs_, test_idxs_ = read_csv(self.file_csv_dict[dataset_name])
+                    train_idxs.extend([f"{dataset_name}_{idx}" for idx in train_idxs_])
+                    val_idxs.extend([f"{dataset_name}_{idx}" for idx in val_idxs_])
+                    test_idxs.extend([f"{dataset_name}_{idx}" for idx in test_idxs_])
+                train_idxs = np.array(train_idxs)
+                val_idxs = np.array(val_idxs)
+                test_idxs = np.array(test_idxs)
+
+            else:
+
+                train_idxs, val_idxs, test_idxs = read_csv(self.file_csv_dict)
+
             train_inter_idxs = set(self.pids_list).intersection(train_idxs)
             test_inter_idxs = set(self.pids_list).intersection(test_idxs)
             val_inter_idxs = set(self.pids_list).intersection(val_idxs)
