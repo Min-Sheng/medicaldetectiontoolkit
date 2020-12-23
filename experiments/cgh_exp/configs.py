@@ -39,7 +39,7 @@ class configs(DefaultConfigs):
 
         self.seed = 2020
         # one out of [2, 3]. dimension the model operates in.
-        self.dim = 3
+        self.dim = 2
 
         # one out of ['mrcnn', 'retina_net', 'retina_unet', 'detection_unet', 'ufrcnn'].
         self.model = 'retina_unet'
@@ -137,6 +137,11 @@ class configs(DefaultConfigs):
 
         self.optimizer = "Adam"
 
+        # set step_lr_scheduling 
+        self.multi_step_lr_scheduling = True
+        self.scheduling_milestones = [250, 400]
+        self.lr_decay_factor = 0.1
+
         # set dynamic_lr_scheduling to True to apply LR scheduling with below settings.
         self.dynamic_lr_scheduling = False
         self.lr_decay_factor = 0.25
@@ -155,7 +160,7 @@ class configs(DefaultConfigs):
         self.min_save_thresh = 0 if self.dim == 2 else 0
 
         self.report_score_level = ['patient', 'rois']  # choose list from 'patient', 'rois'
-        self.multi_class = True
+        self.multi_class = False
         if self.multi_class:
             self.class_dict = {1: 'solid', 2: 'semi-solid', 3: 'GGO'}  # 0 is background.
         else:

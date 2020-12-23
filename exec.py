@@ -55,6 +55,8 @@ def train(logger):
                                                                    exclude_from_wd=cf.exclude_from_wd),
                                       lr=cf.learning_rate[0])
 
+    if cf.multi_step_lr_scheduling:
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=cf.scheduling_milestones, gamma=cf.lr_decay_factor)
 
     if cf.dynamic_lr_scheduling:
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode=cf.scheduling_mode, factor=cf.lr_decay_factor,
@@ -147,6 +149,8 @@ def train(logger):
         # -------------- scheduling -----------------
         if cf.dynamic_lr_scheduling:
             scheduler.step(monitor_metrics["val"][cf.scheduling_criterion][-1])
+        elif cf.multi_step_lr_scheduling:
+            scheduler.step()
         else:
             for param_group in optimizer.param_groups:
                 param_group['lr'] = cf.learning_rate[epoch-1]

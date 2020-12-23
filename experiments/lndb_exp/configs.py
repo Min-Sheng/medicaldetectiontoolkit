@@ -138,6 +138,11 @@ class configs(DefaultConfigs):
 
         self.optimizer = "Adam"
 
+        # set step_lr_scheduling 
+        self.multi_step_lr_scheduling = True
+        self.scheduling_milestones = [250, 400]
+        self.lr_decay_factor = 0.1
+        
         # set dynamic_lr_scheduling to True to apply LR scheduling with below settings.
         self.dynamic_lr_scheduling = False
         self.lr_decay_factor = 0.25
