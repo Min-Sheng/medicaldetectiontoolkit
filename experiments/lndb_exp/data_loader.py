@@ -104,6 +104,13 @@ def get_test_generator(cf, logger):
         # warnings.warn('WARNING: using validation set for testing!!!')
 
     test_data = load_dataset(cf, logger, test_ix, pp_data_path=cf.pp_test_data_path, pp_name=pp_name)
+    if cf.file_csv_dict:
+        all_pids_list = np.unique([v['pid'] for (k, v) in test_data.items()])
+        train_pids, val_pids, test_pids = dutils.read_csv(cf.file_csv_dict)
+        test_inter_pids = set(all_pids_list).intersection(test_pids)
+        test_data = {k: v for (k, v) in test_data.items() if any(p == v['pid'] for p in test_inter_pids)}
+        test_ix = np.arange(len(test_data))
+    
     logger.info("data set loaded with: {} test patients".format(len(test_ix)))
     batch_gen = {}
     batch_gen['test'] = PatientBatchIterator(test_data, cf=cf)
